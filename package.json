@@ -21,7 +21,9 @@
   },
   "author": "nondanee",
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "execa": "^5.1.1"
+  },
   "publishConfig": {
     "access": "public"
   }

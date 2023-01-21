@@ -63,7 +63,30 @@ async function match(id, source, data) {
 	const audioInfo = await find(id, data);
 	let audioData = null;
 
-	if (process.env.FOLLOW_SOURCE_ORDER) {
+	if (process.env.REPLACE_SONG_WITH_MAX_BR) {
+		let audioDataArr = await Promise.allSettled(
+			candidate.map(async (source) =>
+				getAudioFromSource(source, audioInfo).catch((e) => {
+					if (e) {
+						if (e instanceof RequestCancelled) logger.debug(e);
+						else logger.error(e);
+					}
+					throw e; // We just log it instead of resolving it.
+				})
+			)
+		);
+		
+		audioDataArr = audioDataArr.filter((result) => result.status === "fulfilled");
+
+		if (audioDataArr.length === 0) {
+			throw new SongNotAvailable('any source');
+		}
+
+		audioDataArr = audioDataArr.map((result) => result.value);
+		audioDataArr.sort((a, b) => b.br - a.br);
+
+		audioData = audioDataArr[0];
+	} else if (process.env.FOLLOW_SOURCE_ORDER) {
 		for (let i = 0; i < candidate.length; i++) {
 			const source = candidate[i];
 			try {
@@ -147,6 +170,13 @@ async function check(url) {
 		song.br = bitrate && !isNaN(bitrate) ? bitrate * 1000 : null;
 	} catch (e) {
 		logger.debug(e, 'Failed to decode and extract the bitrate');
+	}
+
+	if (!song.br) {
+		if (isHost('qq.com') && song.url.includes('.m4a')) {
+			//m4a is the lowest audio quality of qq music, usually 96kbps
+			song.br = 96000;
+		}
 	}
 
 	// Check if "headers" existed. There are some edge cases
